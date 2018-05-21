@@ -31,7 +31,7 @@ from twitter import *
 
 from requests_oauthlib import OAuth1Session
 import json
-from settings import *    #ここでトークンなどの設定ファイルを読み込む。
+# from settings import *    #ここでトークンなどの設定ファイルを読み込む。
 import random
 import datetime
 
