@@ -37,6 +37,19 @@ import datetime
 
 from time import sleep
 
+#amazonのアクセスキー
+
+AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
+AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
+AWS_ASSOCIATE_TAG = os.environ["AWS_ASSOCIATE_TAG"]
+
+# twitterのアクセストークン
+
+CONSUMER_KEY        = os.environ["CONSUMER_KEY"]
+CONSUMER_SECRET_KEY = os.environ["CONSUMER_SECRET_KEY"]
+ACCESS_TOKEN        = os.environ["ACCESS_TOKEN"]
+ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
+
 # pytrendでトレンドワードを取得する >trend_words
 def pytre():
     pytrend = TrendReq()
