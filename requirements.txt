@@ -22,7 +22,6 @@ pydocstyle==2.1.1
 pyflakes==2.0.0
 python-dateutil==2.7.3
 python-dotenv==0.8.2
-python-language-server==0+unknown
 pytrends==4.3.0
 pytz==2018.4
 requests==2.18.4
