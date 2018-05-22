@@ -54,7 +54,7 @@ ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
 # pytrendでトレンドワードを取得する >trend_words
 def pytre():
     pytrend = TrendReq()
-    trending_searches_df = pytrend.trending_searches(pn='p1')
+    trending_searches_df = pytrend.trending_searches() #(pn='p1')
     trend_words = trending_searches_df["title"]
     print(trend_words)
     return(trend_words)
