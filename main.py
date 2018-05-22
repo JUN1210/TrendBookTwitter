@@ -16,6 +16,9 @@ Original file is located at
 !pip install beautifulsoup4
 !pip install requests requests_oauthlib
 """
+
+pip install git+https://github.com/GeneralMills/pytrends@master --upgrade
+    
 from pytrends.request import TrendReq
 
 import os
