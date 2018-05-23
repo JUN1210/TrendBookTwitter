@@ -16,9 +16,8 @@ Original file is located at
 !pip install beautifulsoup4
 !pip install requests requests_oauthlib
 """
-    
 from pytrends.request import TrendReq
-
+import requests
 import os
 import urllib
 import re
@@ -39,22 +38,169 @@ import datetime
 from time import sleep
 
 #amazonのアクセスキー
-
 AWS_ACCESS_KEY_ID = os.environ["AWS_ACCESS_KEY_ID"]
 AWS_SECRET_ACCESS_KEY = os.environ["AWS_SECRET_ACCESS_KEY"]
 AWS_ASSOCIATE_TAG = os.environ["AWS_ASSOCIATE_TAG"]
 
 # twitterのアクセストークン
-
 CONSUMER_KEY        = os.environ["CONSUMER_KEY"]
 CONSUMER_SECRET_KEY = os.environ["CONSUMER_SECRET_KEY"]
 ACCESS_TOKEN        = os.environ["ACCESS_TOKEN"]
 ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
 
+#pytrendのupgradeが効かないので関数を修正
+class TrendReq(object):
+    
+    GET_METHOD = 'get'
+    POST_METHOD = 'post'
+
+    GENERAL_URL = 'https://trends.google.com/trends/api/explore'
+    INTEREST_OVER_TIME_URL = 'https://trends.google.com/trends/api/widgetdata/multiline'
+    INTEREST_BY_REGION_URL = 'https://trends.google.com/trends/api/widgetdata/comparedgeo'
+    RELATED_QUERIES_URL = 'https://trends.google.com/trends/api/widgetdata/relatedsearches'
+    TRENDING_SEARCHES_URL = 'https://trends.google.com/trends/hottrends/hotItems'
+    TOP_CHARTS_URL = 'https://trends.google.com/trends/topcharts/chart'
+    SUGGESTIONS_URL = 'https://trends.google.com/trends/api/autocomplete/'
+    CATEGORIES_URL = 'https://trends.google.com/trends/api/explore/pickers/category'
+
+    def __init__(self, hl='en-US', tz=360, geo='', proxies=''):
+        """
+        Initialize default values for params
+        """
+        # google rate limit
+        self.google_rl = 'You have reached your quota limit. Please try again later.'
+        self.results = None
+
+        # set user defined options used globally
+        self.tz = tz
+        self.hl = hl
+        self.geo = geo
+        self.kw_list = list()
+        self.proxies = proxies #add a proxy option 
+        #proxies format: {"http": "http://192.168.0.1:8888" , "https": "https://192.168.0.1:8888"}
+
+        # intialize widget payloads
+        self.token_payload = dict()
+        self.interest_over_time_widget = dict()
+        self.interest_by_region_widget = dict()
+        self.related_topics_widget_list = list()
+        self.related_queries_widget_list = list()
+
+    def _get_data(self, url, method=GET_METHOD, trim_chars=0, **kwargs):
+        """Send a request to Google and return the JSON response as a Python object
+        :param url: the url to which the request will be sent
+        :param method: the HTTP method ('get' or 'post')
+        :param trim_chars: how many characters should be trimmed off the beginning of the content of the response
+            before this is passed to the JSON parser
+        :param kwargs: any extra key arguments passed to the request builder (usually query parameters or data)
+        :return:
+        """
+        if method == TrendReq.POST_METHOD:
+            s = requests.session()
+            if self.proxies != '':
+                s.proxies.update(self.proxies)
+            response = s.post(url, **kwargs)
+        else:
+            s = requests.session()
+            if self.proxies != '':
+                s.proxies.update(self.proxies)
+            response = s.get(url,**kwargs)
+
+        # check if the response contains json and throw an exception otherwise
+        # Google mostly sends 'application/json' in the Content-Type header,
+        # but occasionally it sends 'application/javascript
+        # and sometimes even 'text/javascript
+        if 'application/json' in response.headers['Content-Type'] or \
+            'application/javascript' in response.headers['Content-Type'] or \
+                'text/javascript' in response.headers['Content-Type']:
+
+            # trim initial characters
+            # some responses start with garbage characters, like ")]}',"
+            # these have to be cleaned before being passed to the json parser
+            content = response.text[trim_chars:]
+
+            # parse json
+            return json.loads(content)
+        else:
+            # this is often the case when the amount of keywords in the payload for the IP
+            # is not allowed by Google
+            raise exceptions.ResponseError('The request failed: Google returned a '
+                                           'response with code {0}.'.format(response.status_code), response=response)
+
+    def build_payload(self, kw_list, cat=0, timeframe='today 5-y', geo='', gprop=''):
+        """Create the payload for related queries, interest over time and interest by region"""
+        self.kw_list = kw_list
+        self.geo = geo
+        self.token_payload = {
+            'hl': self.hl,
+            'tz': self.tz,
+            'req': {'comparisonItem': [], 'category': cat, 'property': gprop}
+        }
+
+        # build out json for each keyword
+        for kw in self.kw_list:
+            keyword_payload = {'keyword': kw, 'time': timeframe, 'geo': self.geo}
+            self.token_payload['req']['comparisonItem'].append(keyword_payload)
+        # requests will mangle this if it is not a string
+        self.token_payload['req'] = json.dumps(self.token_payload['req'])
+        # get tokens
+        self._tokens()
+        return
+
+    def _tokens(self):
+        """Makes request to Google to get API tokens for interest over time, interest by region and related queries"""
+
+        # make the request and parse the returned json
+        widget_dict = self._get_data(
+            url=TrendReq.GENERAL_URL,
+            method=TrendReq.GET_METHOD,
+            params=self.token_payload,
+            trim_chars=4,
+        )['widgets']
+
+        # order of the json matters...
+        first_region_token = True
+        # clear self.related_queries_widget_list and self.related_topics_widget_list
+        # of old keywords'widgets
+        self.related_queries_widget_list[:] = []
+        self.related_topics_widget_list[:] = []
+        # assign requests
+        for widget in widget_dict:
+            if widget['id'] == 'TIMESERIES':
+                self.interest_over_time_widget = widget
+            if widget['id'] == 'GEO_MAP' and first_region_token:
+                self.interest_by_region_widget = widget
+                first_region_token = False
+            # response for each term, put into a list
+            if 'RELATED_TOPICS' in widget['id']:
+                self.related_topics_widget_list.append(widget)
+            if 'RELATED_QUERIES' in widget['id']:
+                self.related_queries_widget_list.append(widget)
+        return
+        
+    def trending_searches(self, pn='p1'):
+        # make the request
+        forms = {'ajax': 1, 'pn': 'p4', 'htd': '', 'htv': 'l'}
+        req_json = self._get_data(
+            url=TrendReq.TRENDING_SEARCHES_URL,
+            method=TrendReq.POST_METHOD,
+            data=forms,
+        )['trendsByDateList']
+        result_df = pd.DataFrame()
+
+        # parse the returned json
+        sub_df = pd.DataFrame()
+        for trenddate in req_json:
+            sub_df['date'] = trenddate['date']
+            for trend in trenddate['trendsList']:
+                sub_df = sub_df.append(trend, ignore_index=True)
+        result_df = pd.concat([result_df, sub_df])
+        return result_df
+
 # pytrendでトレンドワードを取得する >trend_words
 def pytre():
     pytrend = TrendReq()
-    trending_searches_df = pytrend.trending_searches(pn='p4') #(pn='p1')
+    trending_searches_df = pytrend.trending_searches()
     trend_words = trending_searches_df["title"]
     print(trend_words)
     return(trend_words)
@@ -129,9 +275,9 @@ def tweet():
         params = {"status" : tweet, "media_ids" : [media_id]}
         req = twitter.post("https://api.twitter.com/1.1/statuses/update.json", params = params)    
 
-        sleep(10) #3分待つ
+        sleep(120) #2分待つ
     
-        if loopCounter > 3:
+        if loopCounter > 15:
             break
         loopCounter += 1
 
