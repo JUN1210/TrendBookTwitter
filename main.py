@@ -22,7 +22,7 @@ import os
 import urllib
 import re
 import pandas as pd
-from dotenv import find_dotenv, load_dotenv
+# from dotenv import find_dotenv, load_dotenv
 from bottlenose import Amazon
 from bs4 import BeautifulSoup
 from retry import retry
